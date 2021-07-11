@@ -80,38 +80,45 @@ public class HttpProxyInterceptPipeline {
 
     public void beforeRequest(Channel clientChannel, HttpRequest httpRequest) throws Exception {
         this.httpRequest = httpRequest;
-        if (this.posBeforeHead < intercepts.size()) {
-            HttpProxyIntercept intercept = intercepts.get(this.posBeforeHead++);
-            intercept.beforeRequest(clientChannel, this.httpRequest);
-        }
-        this.posBeforeHead = 0;
+        intercepts.forEach(intercept -> {
+            try {
+                intercept.beforeRequest(clientChannel, httpRequest);
+            } catch (Exception e) {
+
+            }
+        });
     }
 
     public void beforeRequest(Channel clientChannel, HttpContent httpContent) throws Exception {
-        if (this.posBeforeContent < intercepts.size()) {
-            HttpProxyIntercept intercept = intercepts.get(this.posBeforeContent++);
-            intercept.beforeRequest(clientChannel, httpContent);
-        }
-        this.posBeforeContent = 0;
+        intercepts.forEach(intercept -> {
+            try {
+                intercept.beforeRequest(clientChannel, httpContent);
+            } catch (Exception e) {
+
+            }
+        });
     }
 
     public void afterResponse(Channel clientChannel, Channel proxyChannel, HttpResponse httpResponse)
             throws Exception {
-        this.httpResponse = httpResponse;
-        if (this.posAfterHead < intercepts.size()) {
-            HttpProxyIntercept intercept = intercepts.get(this.posAfterHead++);
-            intercept.afterResponse(clientChannel, proxyChannel, this.httpResponse);
-        }
-        this.posAfterHead = 0;
+        intercepts.forEach(intercept -> {
+            try {
+                intercept.afterResponse(clientChannel, proxyChannel, httpResponse);
+            } catch (Exception e) {
+
+            }
+        });
     }
 
     public void afterResponse(Channel clientChannel, Channel proxyChannel, HttpContent httpContent)
             throws Exception {
-        if (this.posAfterContent < intercepts.size()) {
-            HttpProxyIntercept intercept = intercepts.get(this.posAfterContent++);
-            intercept.afterResponse(clientChannel, proxyChannel, httpContent);
-        }
-        this.posAfterContent = 0;
+        intercepts.forEach(intercept -> {
+            try {
+                intercept.afterResponse(clientChannel, proxyChannel, httpContent);
+            } catch (Exception e) {
+
+            }
+        });
     }
 
 }

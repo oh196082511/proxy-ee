@@ -1,5 +1,6 @@
 package com.example.ouhai.proxyee.handler;
 
+import com.example.ouhai.proxyee.crt.CertPool;
 import com.example.ouhai.proxyee.intercept.HttpProxyInterceptInitializer;
 import com.example.ouhai.proxyee.intercept.HttpProxyInterceptPipeline;
 import com.example.ouhai.proxyee.proxyenum.ServerHandleStatus;
@@ -9,6 +10,7 @@ import com.example.ouhai.proxyee.util.ProtoUtil;
 import com.example.ouhai.proxyee.util.ProtoUtil.RequestProto;
 
 import io.netty.bootstrap.Bootstrap;
+import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
@@ -22,10 +24,14 @@ import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpResponse;
 
+import io.netty.handler.codec.http.HttpServerCodec;
 import io.netty.handler.codec.http.HttpVersion;
+import io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.util.ReferenceCountUtil;
 import lombok.Data;
 
+import java.net.InetSocketAddress;
 import java.net.URL;
 import java.util.LinkedList;
 import java.util.List;
@@ -39,7 +45,7 @@ public class HttpProxyServerHandle extends ChannelInboundHandlerAdapter {
     private int port;
     private int status = 0;
     private HttpProxyServerConfig serverConfig;
-    private HttpProxyInterceptInitializer interceptInitializer; //TODO 在init阶段，可以为目标pineline增加一些特殊intercept,比如CertDownIntercept
+    private HttpProxyInterceptInitializer interceptInitializer;
     private HttpProxyInterceptPipeline interceptPipeline;// serverHandle真正的pipeline
     private boolean isSsl = false;
     private List requestList;
@@ -98,7 +104,21 @@ public class HttpProxyServerHandle extends ChannelInboundHandlerAdapter {
                 status = 1;
             }
         } else { // ssl和websocket的握手处理
-            // TODO 处理SSL
+            if (serverConfig.isHandleSsl()) {
+                ByteBuf byteBuf = (ByteBuf) msg;
+                if (byteBuf.getByte(0) == 22) {// ssl握手
+                    isSsl = true;
+                    int port = ((InetSocketAddress) ctx.channel().localAddress()).getPort();
+                    SslContext sslCtx = SslContextBuilder
+                            .forServer(serverConfig.getServerPriKey(), CertPool.getCert(port, this.host, serverConfig)).build();
+                    ctx.pipeline().addFirst("httpCodec", new HttpServerCodec());
+                    ctx.pipeline().addFirst("sslHandle", sslCtx.newHandler(ctx.alloc()));
+                    // 重新过一遍pipeline，拿到解密后的的http报文
+                    ctx.pipeline().fireChannelRead(msg);
+                    return;
+                }
+            }
+            handleProxyData(ctx.channel(), msg, false);
         }
     }
 
@@ -155,6 +175,14 @@ public class HttpProxyServerHandle extends ChannelInboundHandlerAdapter {
                     channel.close();
                 }
             });
+        } else {
+            synchronized (requestList) {
+                if (isConnect) {
+                    cf.channel().writeAndFlush(msg);
+                } else {
+                    requestList.add(msg);
+                }
+            }
         }
     }
 }
